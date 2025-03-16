@@ -321,4 +321,4 @@ class BiGRUAttention:
         custom_objects = {'AttentionLayer': AttentionLayer}
         
         self.model = tf.keras.models.load_model(model_path, custom_objects=custom_objects)
-"""
+

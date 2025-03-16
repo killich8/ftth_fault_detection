@@ -127,7 +127,7 @@ class OTDRPreprocessingPipeline:
         """
         # Load and split data
         self.data_loader.load_data()
-        X_train_seq, X_val_seq, X_test_seq, y_train, y_val, y_test = self.data_loader.prepare_sequences_for_rnn()
+        X_train_seq, X_val_seq, X_test_seq,snr_values, y_train, y_val, y_test = self.data_loader.prepare_sequences_for_rnn()
         
         # Apply denoising if requested
         if denoise:

@@ -1,0 +1,8 @@
+Anomaly Threshold: 0.311551
+Accuracy: 0.1525
+Precision: 0.7486
+Recall: 0.0431
+F1 Score: 0.0816
+Confusion Matrix:
+[[ 2892   318]
+ [21010   947]]
