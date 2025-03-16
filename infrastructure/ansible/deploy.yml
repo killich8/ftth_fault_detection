@@ -1,0 +1,110 @@
+---
+# Ansible playbook for deploying FTTH Fiber Optic Fault Detection system on AWS
+- name: Deploy FTTH Fault Detection System
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  
+  vars:
+    project_name: ftth-fault-detection
+    aws_region: "{{ lookup('env', 'AWS_REGION') | default('us-east-1', true) }}"
+    environment: "{{ lookup('env', 'ENVIRONMENT') | default('production', true) }}"
+    ecr_repository_url: "{{ lookup('env', 'ECR_REPOSITORY_URL') }}"
+    model_bucket_name: "{{ lookup('env', 'MODEL_BUCKET_NAME') }}"
+    data_bucket_name: "{{ lookup('env', 'DATA_BUCKET_NAME') }}"
+  
+  tasks:
+    - name: Ensure AWS CLI is installed
+      pip:
+        name: awscli
+        state: present
+      become: true
+      
+    - name: Ensure Docker is installed
+      apt:
+        name: 
+          - docker.io
+          - python3-docker
+        state: present
+        update_cache: yes
+      become: true
+      
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+      become: true
+      
+    - name: Add current user to docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+      become: true
+      
+    - name: Log in to Amazon ECR
+      shell: aws ecr get-login-password --region {{ aws_region }} | docker login --username AWS --password-stdin {{ ecr_repository_url.split('/')[0] }}
+      args:
+        executable: /bin/bash
+      
+    - name: Build Docker image
+      docker_image:
+        name: "{{ project_name }}"
+        build:
+          path: /home/ubuntu/ftth_fault_detection
+          dockerfile: Dockerfile
+        source: build
+        tag: "{{ ecr_repository_url }}:latest"
+      
+    - name: Push Docker image to ECR
+      docker_image:
+        name: "{{ ecr_repository_url }}:latest"
+        push: yes
+        source: local
+      
+    - name: Upload models to S3
+      aws_s3:
+        bucket: "{{ model_bucket_name }}"
+        object: "models/"
+        src: /home/ubuntu/ftth_fault_detection/models/
+        mode: put
+        recursive: yes
+      
+    - name: Ensure Terraform is installed
+      unarchive:
+        src: https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+        dest: /usr/local/bin
+        remote_src: yes
+        mode: 0755
+        owner: root
+        group: root
+      become: true
+      
+    - name: Initialize Terraform
+      command: terraform init
+      args:
+        chdir: /home/ubuntu/ftth_fault_detection/infrastructure/terraform
+      
+    - name: Apply Terraform configuration
+      command: terraform apply -auto-approve
+      args:
+        chdir: /home/ubuntu/ftth_fault_detection/infrastructure/terraform
+      environment:
+        AWS_REGION: "{{ aws_region }}"
+        TF_VAR_environment: "{{ environment }}"
+        TF_VAR_project_name: "{{ project_name }}"
+      
+    - name: Get Terraform outputs
+      command: terraform output -json
+      args:
+        chdir: /home/ubuntu/ftth_fault_detection/infrastructure/terraform
+      register: terraform_outputs
+      
+    - name: Parse Terraform outputs
+      set_fact:
+        tf_outputs: "{{ terraform_outputs.stdout | from_json }}"
+      
+    - name: Display application URL
+      debug:
+        msg: "Application is deployed and available at: http://{{ tf_outputs.load_balancer_dns.value }}"
