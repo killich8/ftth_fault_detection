@@ -9,7 +9,7 @@ import tensorflow as tf
 from tensorflow.keras.models import load_model
 
 import sys
-sys.path.append('/home/ubuntu/ftth_fault_detection')
+sys.path.append('./')
 
 from src.preprocessing import OTDRDataProcessor
 from src.training import AttentionLayer
@@ -210,7 +210,10 @@ class OTDRFaultPredictor:
         """
         # Detect anomalies
         anomaly_results = self.detect_anomaly(trace_data, denoise)
-        
+
+        if isinstance(trace_data, np.ndarray) and trace_data.ndim == 1:
+         trace_data = trace_data.reshape(1, -1)
+         
         # If anomaly detected, diagnose fault
         if any(anomaly_results['is_anomaly']):
             fault_results = self.diagnose_fault(trace_data, denoise=denoise)

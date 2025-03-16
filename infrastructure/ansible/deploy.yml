@@ -52,7 +52,7 @@
       docker_image:
         name: "{{ project_name }}"
         build:
-          path: /home/ubuntu/ftth_fault_detection
+          path: .
           dockerfile: Dockerfile
         source: build
         tag: "{{ ecr_repository_url }}:latest"
@@ -67,7 +67,7 @@
       aws_s3:
         bucket: "{{ model_bucket_name }}"
         object: "models/"
-        src: /home/ubuntu/ftth_fault_detection/models/
+        src: .models/
         mode: put
         recursive: yes
       
@@ -84,12 +84,12 @@
     - name: Initialize Terraform
       command: terraform init
       args:
-        chdir: /home/ubuntu/ftth_fault_detection/infrastructure/terraform
+        chdir: ./infrastructure/terraform
       
     - name: Apply Terraform configuration
       command: terraform apply -auto-approve
       args:
-        chdir: /home/ubuntu/ftth_fault_detection/infrastructure/terraform
+        chdir: ./infrastructure/terraform
       environment:
         AWS_REGION: "{{ aws_region }}"
         TF_VAR_environment: "{{ environment }}"
@@ -98,7 +98,7 @@
     - name: Get Terraform outputs
       command: terraform output -json
       args:
-        chdir: /home/ubuntu/ftth_fault_detection/infrastructure/terraform
+        chdir: ./infrastructure/terraform
       register: terraform_outputs
       
     - name: Parse Terraform outputs

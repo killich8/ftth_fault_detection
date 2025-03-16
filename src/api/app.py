@@ -16,7 +16,7 @@ import json
 from datetime import datetime
 
 import sys
-sys.path.append('/home/ubuntu/ftth_fault_detection')
+sys.path.append('./')
 
 from src.inference import OTDRFaultPredictor
 
@@ -50,11 +50,11 @@ app.add_middleware(
 # Model paths (to be configured via environment variables in production)
 AUTOENCODER_MODEL_PATH = os.environ.get(
     "AUTOENCODER_MODEL_PATH", 
-    "/home/ubuntu/ftth_fault_detection/models/autoencoder_latest/autoencoder_model.h5"
+    "./models/autoencoder_latest/autoencoder_model.h5"
 )
 BIGRU_MODEL_PATH = os.environ.get(
     "BIGRU_MODEL_PATH", 
-    "/home/ubuntu/ftth_fault_detection/models/bigru_attention_latest/bigru_attention_model.h5"
+    "./models/bigru_attention_latest/bigru_attention_model.h5"
 )
 
 # Initialize predictor
@@ -174,6 +174,7 @@ async def predict(trace: OTDRTrace):
         logger.error(f"Error making prediction: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error making prediction: {str(e)}")
 
+
 @app.post("/predict/batch")
 async def predict_batch(file: UploadFile = File(...), background_tasks: BackgroundTasks = None):
     """
@@ -212,45 +213,59 @@ async def predict_batch(file: UploadFile = File(...), background_tasks: Backgrou
                 detail=f"CSV file missing required columns: {', '.join(missing_columns)}"
             )
         
-        # Process each row
-        results = []
-        for _, row in df.iterrows():
-            # Prepare input data
-            trace_data = np.array([row['SNR']] + [row[f'P{i}'] for i in range(1, 31)])
-            
-            # Make prediction
-            prediction = predictor.predict(trace_data)
-            
-            # Extract relevant information
-            anomaly_detected = any(prediction['anomaly_detection']['is_anomaly'])
-            reconstruction_error = prediction['anomaly_detection']['reconstruction_error'][0]
-            
-            if anomaly_detected:
-                fault_type = prediction['fault_diagnosis']['class_name'][0]
-                fault_location = prediction['fault_diagnosis']['position'][0]
-                
-                # Get confidence from class probabilities
-                class_index = prediction['fault_diagnosis']['class_index'][0]
-                confidence = prediction['fault_diagnosis']['class_probabilities'][0][class_index]
-            else:
-                fault_type = "normal"
-                fault_location = None
-                confidence = None
-            
-            # Add to results
-            results.append({
-                'anomaly_detected': anomaly_detected,
-                'fault_type': fault_type,
-                'fault_location': fault_location,
-                'confidence': confidence,
-                'reconstruction_error': reconstruction_error
-            })
+        # Process in batches to manage memory usage
+        BATCH_SIZE = 100
+        all_results = []
         
-        return {"results": results}
+        # Split dataframe into chunks of BATCH_SIZE
+        df_chunks = [df[i:i+BATCH_SIZE] for i in range(0, len(df), BATCH_SIZE)]
+        
+        for chunk in df_chunks:
+            chunk_results = []
+            for _, row in chunk.iterrows():
+                # Prepare input data
+                trace_data = np.array([row['SNR']] + [row[f'P{i}'] for i in range(1, 31)])
+                
+                # Make prediction
+                prediction = predictor.predict(trace_data)
+                
+                # Extract relevant information
+                anomaly_detected = any(prediction['anomaly_detection']['is_anomaly'])
+                reconstruction_error = prediction['anomaly_detection']['reconstruction_error'][0]
+                
+                if anomaly_detected:
+                    fault_type = prediction['fault_diagnosis']['class_name'][0]
+                    fault_location = prediction['fault_diagnosis']['position'][0]
+                    
+                    # Get confidence from class probabilities
+                    class_index = prediction['fault_diagnosis']['class_index'][0]
+                    confidence = prediction['fault_diagnosis']['class_probabilities'][0][class_index]
+                else:
+                    fault_type = "normal"
+                    fault_location = None
+                    confidence = None
+                
+                # Add to chunk results
+                chunk_results.append({
+                    'anomaly_detected': anomaly_detected,
+                    'fault_type': fault_type,
+                    'fault_location': fault_location,
+                    'confidence': confidence,
+                    'reconstruction_error': reconstruction_error
+                })
+            
+            # Add chunk results to all results
+            all_results.extend(chunk_results)
+            
+            # Log progress
+            logger.info(f"Processed {len(all_results)}/{len(df)} samples")
+        
+        return {"results": all_results}
     
     except Exception as e:
         logger.error(f"Error processing batch: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing batch: {str(e)}")
+    
 
 @app.post("/models/reload")
 async def reload_models():

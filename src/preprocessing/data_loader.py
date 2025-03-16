@@ -209,9 +209,11 @@ class OTDRDataLoader:
         X_val_traces = self.X_val[trace_columns].values
         X_test_traces = self.X_test[trace_columns].values
         
+        
         # Reshape for RNN input: (samples, time_steps, features)
         X_train_seq = X_train_traces.reshape(X_train_traces.shape[0], sequence_length, 1)
         X_val_seq = X_val_traces.reshape(X_val_traces.shape[0], sequence_length, 1)
         X_test_seq = X_test_traces.reshape(X_test_traces.shape[0], sequence_length, 1)
+        snr_values = self.X_train['SNR'].values.reshape(-1, 1)
         
-        return X_train_seq, X_val_seq, X_test_seq, self.y_train, self.y_val, self.y_test
+        return X_train_seq, X_val_seq, X_test_seq,snr_values, self.y_train, self.y_val, self.y_test

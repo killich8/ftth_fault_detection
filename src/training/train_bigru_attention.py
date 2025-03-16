@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 
 import sys
-sys.path.append('/home/ubuntu/ftth_fault_detection')
+sys.path.append('./')
 
 from src.preprocessing import OTDRPreprocessingPipeline
 from src.training import BiGRUAttention
